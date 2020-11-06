@@ -6,16 +6,27 @@
 const char *ssid = "Vinna";
 const char *password = "senhapraque";
 const int ledPort = 2;
+char *stateMessage = "IDLE";
+
+#define rxPin 3
+#define txPin 1
+#define dataRate 9600
 
 using namespace websockets;
 
 WebsocketsClient client;
-SoftwareSerial nmcuSerial(3,1);
+SoftwareSerial nmcuSerial(rxPin, txPin);
+
+void onMessageCallback(WebsocketsMessage message) {
+    Serial.print("Got Message: ");
+    nmcuSerial.write(message.c_str());
+}
 
 void setup() {
   pinMode(ledPort, OUTPUT);
-  Serial.begin(9600);
-  nmcuSerial.begin(9600);
+  
+  Serial.begin(dataRate);
+  nmcuSerial.begin(dataRate);
   
   Serial.println();
   Serial.print("Configurando Rede WiFi");
@@ -45,14 +56,10 @@ void setup() {
     Serial.println("Não foi possível se conectar ao servidor WebSocket!");
   }
   
-  client.onMessage([&](WebsocketsMessage message) {
-      Serial.print("Mensagem Recebida: ");
-      Serial.println(message.data());
-      nmcuSerial.write(message.data());
-  });
+  client.onMessage(onMessageCallback);
 }
 
-void loop() {
+void loop() {  
   if (client.available()) {
     client.poll();
   }
