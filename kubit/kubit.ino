@@ -5,7 +5,6 @@
 #include <TM1640.h>
 #include <TM16xxMatrixGFX.h>
 
-#include "SoftwareSerial.h"
 #include "DFRobotDFPlayerMini.h"
 
 /************* Matrix led config *************/
@@ -34,11 +33,13 @@ String defaultEyeState = "IS_OPEN";
 
 String initialState = "IDLE";
 String currentState = "IDLE";
+String previousState = "INITIAL";
 
 String nodemcuMessage;
 
-SoftwareSerial mySoftwareSerial(15, 14); // RX, TX
 DFRobotDFPlayerMini myDFPlayer;
+
+bool isPlaying = false;
 
 void printDetail(uint8_t type, int value);
 
@@ -248,27 +249,31 @@ void setTalking() {
 }
 
 void setup() {
-  mySoftwareSerial.begin(9600);
+  Serial1.begin(9600);
   Serial.begin(9600);
 
   Serial.println();
-  Serial.println(F("DFRobot DFPlayer Mini"));
-  Serial.println(F("Inicializando modulo DFPlayer... (3~5 segundos)"));
+  Serial.println(F("DFRobot DFPlayer Mini Demo"));
+  Serial.println(F("Initializing DFPlayer ... (May take 3~5 seconds)"));
   
-  if (!myDFPlayer.begin(mySoftwareSerial)) {  //Use softwareSerial to communicate with mp3.
+  if (!myDFPlayer.begin(Serial1)) {  //Use softwareSerial to communicate with mp3.
     Serial.println(F("Unable to begin:"));
     Serial.println(F("1.Please recheck the connection!"));
     Serial.println(F("2.Please insert the SD card!"));
-    while(true);
+    while(true){
+      delay(0); // Code to compatible with ESP8266 watch dog.
+    }
   }
+
   Serial.println(F("DFPlayer Mini online."));
-  
-  myDFPlayer.volume(30);  //Set volume value. From 0 to 30
-  myDFPlayer.play(1);  //Play the first mp3
+
+  myDFPlayer.volume(10);
+  myDFPlayer.disableLoop();
 }
 
 void loop() {
  unsigned long elapsedTime = millis();
+ static unsigned long timer = millis();
 
   if (Serial.available() > 0) {
     nodemcuMessage = Serial.readString();
@@ -277,56 +282,51 @@ void loop() {
     Serial.print(nodemcuMessage);
   }
 
+  if (myDFPlayer.available()) {
+    printDetail(myDFPlayer.readType(), myDFPlayer.read()); //Print the detail message from DFPlayer to handle different errors and states.
+  }
+
   if (currentState == "IS_ANGRY") {
       setIsAngry();
   }
   else if (currentState == "IS_BATTERY_LOW") {
     setIsLowBattery();
-    return;
   }
   else if (currentState == "IS_DAMAGED") {
     setIsDamaged();
-    return;
   }
   else if (currentState == "IS_HUNGRY") {
     setIsHungry();
-    return;
   }
   else if (currentState == "IS_SAD") {
     setIsSad();
-    return;
   }
   else if (currentState == "EATING") {
     setEating();
-    return;
   }
   else if (currentState == "ENERGIZING") {
     setEnergizing();
-    return;
   }
   else if (currentState == "FLYING") {
     setIsFlying();
-    return;
   }
   else if (currentState == "IDLE") {
     setIsIdle(elapsedTime);
-    return;
+
+    if (previousState != currentState) {
+      myDFPlayer.play(13);
+
+      previousState = currentState;
+    }
   }
   else if (currentState == "SMILING") {
     setSmiling();
-    return;
   }
   else if (currentState == "TALKING") {
     setTalking();
-    return;
   }
   else {
     setIsIdle(elapsedTime);
-    return;
-  }
-
-  if (myDFPlayer.available()) {
-    printDetail(myDFPlayer.readType(), myDFPlayer.read()); //Print the detail message from DFPlayer to handle different errors and states.
   }
 }
 
@@ -346,6 +346,12 @@ void printDetail(uint8_t type, int value){
       break;
     case DFPlayerCardOnline:
       Serial.println(F("Card Online!"));
+      break;
+    case DFPlayerUSBInserted:
+      Serial.println("USB Inserted!");
+      break;
+    case DFPlayerUSBRemoved:
+      Serial.println("USB Removed!");
       break;
     case DFPlayerPlayFinished:
       Serial.print(F("Number:"));
@@ -383,5 +389,4 @@ void printDetail(uint8_t type, int value){
     default:
       break;
   }
-
 }
